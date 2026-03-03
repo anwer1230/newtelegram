@@ -107,6 +107,41 @@ export const api = {
         500: errorSchemas.internal,
       },
     },
+    joinLinks: {
+      method: "POST" as const,
+      path: "/api/telegram/join-links" as const,
+      input: z.object({ text: z.string() }),
+      responses: {
+        200: z.object({ message: z.string(), linksFound: z.array(z.string()) }),
+        400: errorSchemas.validation,
+        500: errorSchemas.internal,
+      },
+    },
+    search: {
+      method: "POST" as const,
+      path: "/api/telegram/search" as const,
+      input: z.object({ keyword: z.string() }),
+      responses: {
+        200: z.array(z.object({
+          name: z.string(),
+          username: z.string(),
+          link: z.string(),
+          description: z.string().optional(),
+        })),
+        400: errorSchemas.validation,
+        500: errorSchemas.internal,
+      },
+    },
+    joinChat: {
+      method: "POST" as const,
+      path: "/api/telegram/join-chat" as const,
+      input: z.object({ link: z.string() }),
+      responses: {
+        200: z.object({ message: z.string() }),
+        400: errorSchemas.validation,
+        500: errorSchemas.internal,
+      },
+    },
   },
 };
 

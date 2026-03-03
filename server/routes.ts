@@ -20,10 +20,15 @@ let isMonitorRunning = false;
 
 const KEYWORDS = [
   "اريد مساعدة", "ابي مساعدة", "من يسوي تكليف", "من يحل", "عندي بحث", "معي واجب",
-  "عندي اسايمنت", "من يسوي اسايمنت", "ابي سكليف", "ابي عذر", "من يسوي سكليف",
+  "عندي اسايمنت", "من يسوي اسايمنت", "ابي رسالةر", "من يسوي سكليف",
   "ابي شخص مضمون", "ابي مختص", "هيليب", "من يستطيع", "تعرفون احد", "تعرفون شخص",
-  "من يساعدني", "من يعرف مختص", "مين يعرف يحل واجب", "من يحل واجبات الجامعه",
-  "أحتاج مساعدتكم", "ابي احد يسوي بحث", "عندي بحث", "مين يعرف مختص", "من يعرف احد كويس"
+  "من يساعدني", "من يعرف مختص", "ابي مختص", "مين يعرف يحل واجب", "من يحل واجبات الجامعه",
+  "أحتاج مساعدتكم", "ابي احد يسوي بحث", "اريد مساعدة", "ابي مساعدة", "من يسوي تكليف",
+  "من يحل", "عندي بحث", "معي واجب", "عندي اسايمنت", "من يسوي اسايمنت", "ابي سكليف",
+  "ابي عذر", "من يسوي سكليف", "ابي شخص مضمون", "ابي مختص", "هيليب", "من يستطيع",
+  "تعرفون احد", "تعرفون شخص", "من يساعدني", "من يعرف مختص", "ابي مختص", "مين يعرف يحل واجب",
+  "من يحل واجبات الجامعه", "أحتاج مساعدتكم", "ابي احد يسوي بحث", "عندي بحث", "مين يعرف مختص",
+  "من يعرف احد كويس", "طلب تعليمي", "خدمه تعليمية", "مساعدة دراسية", "حل واجبات", "عمل بحوث"
 ];
 
 const MESSAGE_TEXT = `
@@ -122,7 +127,6 @@ export async function registerRoutes(
 
       await client.connect();
 
-      // Start the login process in background, we'll feed it the code when we get it
       client.start({
         phoneNumber: async () => phoneNumber,
         password: async () => {
@@ -146,8 +150,6 @@ export async function registerRoutes(
         console.error("Login flow error:", err);
       });
 
-      // Telegram doesn't give us a phoneCodeHash synchronously like mtproto, 
-      // but we wait a little bit to see if we can trigger the code request.
       res.status(200).json({ message: "Code requested. Please verify.", phoneCodeHash: "dummy" });
 
     } catch (err) {
@@ -164,9 +166,6 @@ export async function registerRoutes(
         phoneCodePromiseResolver = null;
       }
       
-      // We don't know instantly if it needs password or if it's successful, 
-      // ideally we'd wait for a promise. For simplicity, we just assume it's verifying.
-      // Wait a moment to let the start() promise resolve or ask for password
       await new Promise(r => setTimeout(r, 2000));
       
       let isAuth = false;
@@ -179,7 +178,6 @@ export async function registerRoutes(
         await storage.saveSession(sessionString);
         res.status(200).json({ message: "Login successful!" });
       } else {
-        // Assume it needs password if not auth yet
         res.status(200).json({ message: "Code received. Might need password.", needsPassword: true });
       }
     } catch (err) {
@@ -240,10 +238,8 @@ export async function registerRoutes(
       for (const groupLink of allUrls) {
         if (!isSenderRunning) break;
         try {
-          // Handle different types of links
           let entityToMessage: string | Api.TypeEntityLike = groupLink;
           if (groupLink.startsWith('https://t.me/+')) {
-             // Invite link handling - might need join logic or different approach in gramjs
              console.log("Skipping private invite link for now", groupLink);
              continue;
           } else if (groupLink.startsWith('https://t.me/')) {
@@ -275,11 +271,7 @@ export async function registerRoutes(
           return res.json({ message: "Sender already running" });
         }
         isSenderRunning = true;
-        
-        // Initial run
         sendScheduledMessage();
-        
-        // Schedule every 450 seconds (7.5 mins)
         senderInterval = setInterval(sendScheduledMessage, 450 * 1000);
         res.json({ message: "Started scheduled sender" });
       } else {
@@ -300,13 +292,15 @@ export async function registerRoutes(
     if (!isMonitorRunning || !client) return;
 
     const message = event.message;
-    if (message.out) return; // Ignore outgoing
+    if (message.out) return;
 
     const messageText = message.message;
     if (!messageText) return;
 
     const lowerText = messageText.toLowerCase();
-    const matchedKeywords = KEYWORDS.filter(kw => lowerText.includes(kw));
+    
+    // Check line by line or keyword by keyword
+    const matchedKeywords = KEYWORDS.filter(kw => lowerText.includes(kw.toLowerCase()));
 
     if (matchedKeywords.length > 0) {
       try {
@@ -363,6 +357,101 @@ export async function registerRoutes(
       }
     } catch (err) {
       res.status(500).json({ message: "Error toggling monitor" });
+    }
+  });
+
+  // New Helper: Extract links
+  function extractLinks(text: string): string[] {
+    const pattern = /(?:https?:\/\/)?(?:www\.)?t\.me\/(?:joinchat\/)?([a-zA-Z0-9_\-+]+)/g;
+    const matches = Array.from(text.matchAll(pattern));
+    return matches.map(match => {
+      const part = match[1];
+      if (part.startsWith('+') || match[0].includes('joinchat')) {
+        return `https://t.me/joinchat/${part}`;
+      }
+      return `https://t.me/${part}`;
+    });
+  }
+
+  app.post(api.telegram.joinLinks.path, async (req, res) => {
+    try {
+      const { text } = api.telegram.joinLinks.input.parse(req.body);
+      if (!client || !await client.checkAuthorization()) {
+        return res.status(401).json({ message: "Not logged in" });
+      }
+      
+      const links = extractLinks(text);
+      if (links.length === 0) {
+        return res.status(400).json({ message: "No links found" });
+      }
+
+      // Start background task to join
+      (async () => {
+        for (const link of links) {
+          try {
+            if (link.includes('joinchat')) {
+              const hash = link.split('/').pop();
+              if (hash) await client!.invoke(new Api.messages.ImportChatInvite({ hash }));
+            } else {
+              const username = link.split('/').pop();
+              if (username) await client!.invoke(new Api.channels.JoinChannel({ channel: username }));
+            }
+            console.log("Joined successfully:", link);
+            await new Promise(r => setTimeout(r, 2000));
+          } catch (e: any) {
+            console.error("Failed to join:", link, e.message);
+          }
+        }
+      })();
+
+      res.json({ message: "Started joining process", linksFound: links });
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post(api.telegram.search.path, async (req, res) => {
+    try {
+      const { keyword } = api.telegram.search.input.parse(req.body);
+      if (!client || !await client.checkAuthorization()) {
+        return res.status(401).json({ message: "Not logged in" });
+      }
+
+      const result = await client.invoke(new Api.contacts.Search({
+        q: keyword,
+        limit: 100
+      })) as any;
+
+      const groupsResult = result.chats.map((chat: any) => ({
+        name: chat.title,
+        username: chat.username || "",
+        link: chat.username ? `https://t.me/${chat.username}` : "",
+        description: chat.about || ""
+      })).filter((c: any) => c.username !== "");
+
+      res.json(groupsResult);
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post(api.telegram.joinChat.path, async (req, res) => {
+    try {
+      const { link } = api.telegram.joinChat.input.parse(req.body);
+      if (!client || !await client.checkAuthorization()) {
+        return res.status(401).json({ message: "Not logged in" });
+      }
+
+      if (link.includes('joinchat')) {
+        const hash = link.split('/').pop();
+        if (hash) await client.invoke(new Api.messages.ImportChatInvite({ hash }));
+      } else {
+        const username = link.split('/').pop();
+        if (username) await client.invoke(new Api.channels.JoinChannel({ channel: username }));
+      }
+      res.json({ message: "Joined successfully" });
+    } catch (err: any) {
+      res.status(400).json({ message: err.message || "Failed to join" });
     }
   });
 

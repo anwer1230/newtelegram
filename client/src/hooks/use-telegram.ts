@@ -12,7 +12,6 @@ export function useTelegramStatus() {
       if (!res.ok) throw new Error("Failed to fetch status");
       return api.telegram.status.responses[200].parse(await res.json());
     },
-    // Poll every 5 seconds to keep dashboard up to date
     refetchInterval: 5000,
   });
 }
@@ -116,6 +115,57 @@ export function useTelegramMonitor() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.telegram.status.path] });
+    },
+  });
+}
+
+export function useTelegramJoinLinks() {
+  return useMutation({
+    mutationFn: async (text: string) => {
+      const payload = api.telegram.joinLinks.input.parse({ text });
+      const res = await fetch(api.telegram.joinLinks.path, {
+        method: api.telegram.joinLinks.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "فشل الانضمام للروابط");
+      return api.telegram.joinLinks.responses[200].parse(data);
+    },
+  });
+}
+
+export function useTelegramSearch() {
+  return useMutation({
+    mutationFn: async (keyword: string) => {
+      const payload = api.telegram.search.input.parse({ keyword });
+      const res = await fetch(api.telegram.search.path, {
+        method: api.telegram.search.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "فشل البحث");
+      return api.telegram.search.responses[200].parse(data);
+    },
+  });
+}
+
+export function useTelegramJoinChat() {
+  return useMutation({
+    mutationFn: async (link: string) => {
+      const payload = api.telegram.joinChat.input.parse({ link });
+      const res = await fetch(api.telegram.joinChat.path, {
+        method: api.telegram.joinChat.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "فشل الانضمام");
+      return api.telegram.joinChat.responses[200].parse(data);
     },
   });
 }
