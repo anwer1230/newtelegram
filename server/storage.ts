@@ -2,9 +2,11 @@ import { db } from "./db";
 import {
   groups,
   authSession,
+  settings,
   type Group,
   type InsertGroup,
-  type AuthSession
+  type AuthSession,
+  type Setting
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -18,6 +20,10 @@ export interface IStorage {
   getSession(): Promise<AuthSession | undefined>;
   saveSession(sessionString: string): Promise<void>;
   clearSession(): Promise<void>;
+
+  // Settings
+  getSetting(key: string): Promise<Setting | undefined>;
+  updateSetting(key: string, value: string): Promise<Setting>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -46,6 +52,22 @@ export class DatabaseStorage implements IStorage {
 
   async clearSession(): Promise<void> {
     await db.delete(authSession);
+  }
+
+  async getSetting(key: string): Promise<Setting | undefined> {
+    const [setting] = await db.select().from(settings).where(eq(settings.key, key));
+    return setting;
+  }
+
+  async updateSetting(key: string, value: string): Promise<Setting> {
+    const [existing] = await db.select().from(settings).where(eq(settings.key, key));
+    if (existing) {
+      const [updated] = await db.update(settings).set({ value }).where(eq(settings.key, key)).returning();
+      return updated;
+    } else {
+      const [inserted] = await db.insert(settings).values({ key, value }).returning();
+      return inserted;
+    }
   }
 }
 

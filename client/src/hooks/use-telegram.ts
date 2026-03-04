@@ -16,6 +16,37 @@ export function useTelegramStatus() {
   });
 }
 
+export function useMessageText() {
+  return useQuery({
+    queryKey: [api.settings.get.path, "message_text"],
+    queryFn: async () => {
+      const res = await fetch(api.settings.get.path.replace(":key", "message_text"), { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch message text");
+      return api.settings.get.responses[200].parse(await res.json());
+    }
+  });
+}
+
+export function useUpdateMessageText() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (value: string) => {
+      const res = await fetch(api.settings.update.path, {
+        method: api.settings.update.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "message_text", value }),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "فشل تحديث الرسالة");
+      return api.settings.update.responses[200].parse(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.settings.get.path, "message_text"] });
+    },
+  });
+}
+
 export function useTelegramLogin() {
   return useMutation({
     mutationFn: async (phoneNumber: string) => {

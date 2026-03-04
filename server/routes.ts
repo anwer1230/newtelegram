@@ -31,7 +31,7 @@ const KEYWORDS = [
   "من يعرف احد كويس", "طلب تعليمي", "خدمه تعليمية", "مساعدة دراسية", "حل واجبات", "عمل بحوث"
 ];
 
-const MESSAGE_TEXT = `
+const DEFAULT_MESSAGE_TEXT = `
 📚 السلام عليكم 
 للخدمات الطلابيه المتكامله
 💞من خدمتنا💞
@@ -53,6 +53,11 @@ const MESSAGE_TEXT = `
 ↩️للتواصل واتس اب
 https://wa.me/+966562570935
 `;
+
+async function getMessageText() {
+  const setting = await storage.getSetting("message_text");
+  return setting?.value || DEFAULT_MESSAGE_TEXT;
+}
 
 async function initTelegramClient() {
   const sessionData = await storage.getSession();
@@ -109,6 +114,29 @@ export async function registerRoutes(
       res.status(204).end();
     } catch (err) {
       res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  // Settings
+  app.get(api.settings.get.path, async (req, res) => {
+    const key = req.params.key;
+    const setting = await storage.getSetting(key);
+    if (!setting) {
+      if (key === "message_text") {
+        return res.json({ key, value: DEFAULT_MESSAGE_TEXT });
+      }
+      return res.status(404).json({ message: "Setting not found" });
+    }
+    res.json(setting);
+  });
+
+  app.post(api.settings.update.path, async (req, res) => {
+    try {
+      const { key, value } = api.settings.update.input.parse(req.body);
+      const setting = await storage.updateSetting(key, value);
+      res.json(setting);
+    } catch (err) {
+      res.status(400).json({ message: "Invalid input" });
     }
   });
 
@@ -234,6 +262,7 @@ export async function registerRoutes(
 
       const dbGroups = await storage.getGroups();
       const allUrls = dbGroups.map(g => g.url);
+      const messageText = await getMessageText();
       
       for (const groupLink of allUrls) {
         if (!isSenderRunning) break;
@@ -246,7 +275,7 @@ export async function registerRoutes(
              entityToMessage = groupLink.replace('https://t.me/', '');
           }
           
-          await client.sendMessage(entityToMessage, { message: MESSAGE_TEXT });
+          await client.sendMessage(entityToMessage, { message: messageText });
           console.log(`تم الإرسال إلى: ${groupLink}`);
           await new Promise(r => setTimeout(r, 2000));
         } catch (e: any) {

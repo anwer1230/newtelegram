@@ -1,11 +1,20 @@
-import { Play, Square, Activity, Send, Link, Search, Copy, ExternalLink } from "lucide-react";
+import { Play, Square, Activity, Send, Link, Search, Copy, ExternalLink, Edit2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useTelegramSender, useTelegramMonitor, useTelegramJoinLinks, useTelegramSearch, useTelegramJoinChat } from "@/hooks/use-telegram";
+import { 
+  useTelegramSender, 
+  useTelegramMonitor, 
+  useTelegramJoinLinks, 
+  useTelegramSearch, 
+  useTelegramJoinChat,
+  useMessageText,
+  useUpdateMessageText
+} from "@/hooks/use-telegram";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface ControlPanelProps {
   isSenderRunning: boolean;
@@ -18,12 +27,22 @@ export function ControlPanel({ isSenderRunning, isMonitorRunning }: ControlPanel
   const joinLinksMutation = useTelegramJoinLinks();
   const searchMutation = useTelegramSearch();
   const joinChatMutation = useTelegramJoinChat();
+  const { data: messageSetting } = useMessageText();
+  const updateMessageMutation = useUpdateMessageText();
   
   const { toast } = useToast();
   
   const [linksText, setLinksText] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [editingMessage, setEditingMessage] = useState("");
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (messageSetting?.value) {
+      setEditingMessage(messageSetting.value);
+    }
+  }, [messageSetting]);
 
   const handleSenderToggle = async () => {
     try {
@@ -85,6 +104,16 @@ export function ControlPanel({ isSenderRunning, isMonitorRunning }: ControlPanel
     }
   };
 
+  const handleSaveMessage = async () => {
+    try {
+      await updateMessageMutation.mutateAsync(editingMessage);
+      toast({ title: "تم الحفظ", description: "تم تحديث نص الرسالة بنجاح." });
+      setIsEditDialogOpen(false);
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "خطأ", description: error.message });
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: "تم النسخ", description: "تم نسخ الرابط للحافظة." });
@@ -93,10 +122,42 @@ export function ControlPanel({ isSenderRunning, isMonitorRunning }: ControlPanel
   return (
     <div className="space-y-8">
       <div className="glass-panel p-6 rounded-3xl">
-        <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-          <Activity className="w-5 h-5 text-primary" />
-          لوحة التحكم والعمليات
-        </h3>
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-bold flex items-center gap-2">
+            <Activity className="w-5 h-5 text-primary" />
+            لوحة التحكم والعمليات
+          </h3>
+          
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="rounded-xl flex items-center gap-2">
+                <Edit2 className="w-4 h-4" />
+                تعديل رسالة الإرسال
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[600px] rounded-3xl">
+              <DialogHeader>
+                <DialogTitle className="text-right">تعديل نص الرسالة التلقائية</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <Textarea 
+                  className="min-h-[300px] rounded-2xl text-right dir-rtl"
+                  value={editingMessage}
+                  onChange={(e) => setEditingMessage(e.target.value)}
+                  placeholder="اكتب نص الرسالة هنا..."
+                />
+                <Button 
+                  className="w-full rounded-xl flex items-center gap-2" 
+                  onClick={handleSaveMessage}
+                  disabled={updateMessageMutation.isPending}
+                >
+                  <Save className="w-4 h-4" />
+                  حفظ التعديلات
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Sender Controls */}

@@ -37,6 +37,25 @@ export const api = {
       },
     },
   },
+  settings: {
+    get: {
+      method: "GET" as const,
+      path: "/api/settings/:key" as const,
+      responses: {
+        200: z.object({ key: z.string(), value: z.string() }),
+        404: errorSchemas.validation,
+      },
+    },
+    update: {
+      method: "POST" as const,
+      path: "/api/settings" as const,
+      input: z.object({ key: z.string(), value: z.string() }),
+      responses: {
+        200: z.object({ key: z.string(), value: z.string() }),
+        400: errorSchemas.validation,
+      },
+    },
+  },
   telegram: {
     login: {
       method: "POST" as const,
